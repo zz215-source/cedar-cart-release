@@ -1,0 +1,38 @@
+version: 2.1
+jobs:
+  test:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run: pip install --quiet pytest
+      - run: |
+          mkdir -p test-results
+          pytest --junitxml=test-results/junit.xml
+      - store_test_results:
+          path: test-results
+  deploy-production:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run: echo "Deploying B9-238 at $CIRCLE_SHA1 to production"
+  health-check:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - run: curl -fsS https://zz215-source.github.io/cedar-cart-release/ | grep "Cedar Cart Release"
+workflows:
+  release-production:
+    jobs:
+      - test:
+          filters:
+            branches:
+              only: release/b9-238
+      - hold-for-second-approval:
+          type: approval
+          requires: [test]
+      - deploy-production:
+          requires: [hold-for-second-approval]
+      - health-check:
+          requires: [deploy-production]
